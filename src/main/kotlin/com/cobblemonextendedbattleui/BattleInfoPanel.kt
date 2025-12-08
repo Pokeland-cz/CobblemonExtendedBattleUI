@@ -689,7 +689,7 @@ object BattleInfoPanel {
 
         var currentY = contentStartY - PanelConfig.scrollOffset
 
-        currentY = renderSection(context, x, currentY, contentWidth, "FIELD", ACCENT_FIELD) { sectionY ->
+        currentY = renderSection(context, x, currentY, contentWidth, "WEATHER/TERRAIN", ACCENT_FIELD) { sectionY ->
             var sy = sectionY
             var hasContent = false
 
@@ -726,7 +726,7 @@ object BattleInfoPanel {
 
         currentY += SECTION_GAP
 
-        currentY = renderSection(context, x, currentY, contentWidth, "ALLY EFFECTS", ACCENT_PLAYER) { sectionY ->
+        currentY = renderSection(context, x, currentY, contentWidth, "YOUR SIDE", ACCENT_PLAYER) { sectionY ->
             var sy = sectionY
             val conditions = BattleStateTracker.getPlayerSideConditions()
 
@@ -751,7 +751,7 @@ object BattleInfoPanel {
 
         currentY += SECTION_GAP
 
-        currentY = renderSection(context, x, currentY, contentWidth, "ENEMY EFFECTS", ACCENT_OPPONENT) { sectionY ->
+        currentY = renderSection(context, x, currentY, contentWidth, "ENEMY SIDE", ACCENT_OPPONENT) { sectionY ->
             var sy = sectionY
             val conditions = BattleStateTracker.getOpponentSideConditions()
 
@@ -778,7 +778,7 @@ object BattleInfoPanel {
 
         val hasAnyStatChanges = pokemonWithStats.any { it.third.isNotEmpty() }
 
-        renderSection(context, x, currentY, contentWidth, "STAT STAGES", TEXT_GOLD) { sectionY ->
+        renderSection(context, x, currentY, contentWidth, "STAT CHANGES", TEXT_GOLD) { sectionY ->
             var sy = sectionY
 
             if (!hasAnyStatChanges) {
@@ -853,7 +853,7 @@ object BattleInfoPanel {
         val arrow = if (isExpanded) "▼" else "▶"
         val headerTextY = y + (HEADER_HEIGHT - (8 * textScale).toInt()) / 2
         drawText(context, arrow, (x + PADDING).toFloat(), headerTextY.toFloat(), TEXT_GOLD, 0.85f * textScale)
-        drawText(context, "BATTLE INFO", (x + PADDING + (12 * textScale).toInt()).toFloat(), headerTextY.toFloat(), TEXT_WHITE, 0.85f * textScale)
+        drawText(context, "BATTLE INFO by Vaniron", (x + PADDING + (12 * textScale).toInt()).toFloat(), headerTextY.toFloat(), TEXT_WHITE, 0.85f * textScale)
 
         val turnText = "T${BattleStateTracker.currentTurn}"
         val charWidth = (5 * textScale).toInt()
