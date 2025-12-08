@@ -4,9 +4,9 @@
   "version": "${version}",
   "name": "Cobblemon Extended Battle UI",
   "description": "Customizes and enhances the Cobblemon battle UI",
-  "authors": ["sverre"],
+  "authors": ["sveniik"],
   "contact": {
-    "homepage": "",
+    "homepage": "https://github.com/sveniik/CobblemonExtendedBattleUI",
     "sources": ""
   },
   "license": "MIT",
