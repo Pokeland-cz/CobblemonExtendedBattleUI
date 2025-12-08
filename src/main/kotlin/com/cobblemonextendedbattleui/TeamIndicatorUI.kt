@@ -93,7 +93,7 @@ object TeamIndicatorUI {
         val opponentActiveCount = opponentSide.actors.sumOf { it.activePokemon.size }
 
         // Get player's team from client storage (full party)
-        val playerParty = CobblemonClient.storage.party
+        val playerParty = CobblemonClient.storage.myParty
         val playerTeam = playerParty.slots.filterNotNull()
 
         // Update tracked opponent Pokemon from active Pokemon
