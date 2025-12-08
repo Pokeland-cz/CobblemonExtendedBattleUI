@@ -10,8 +10,17 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object BattleStateTracker {
 
+    private var lastBattleId: UUID? = null
+
     var currentTurn: Int = 0
         private set
+
+    fun checkBattleChanged(battleId: UUID) {
+        if (lastBattleId != battleId) {
+            clear()
+            lastBattleId = battleId
+        }
+    }
 
     enum class Weather(val displayName: String, val icon: String) {
         RAIN("Rain", "🌧"),
@@ -87,6 +96,7 @@ object BattleStateTracker {
     private val nameToUuid = ConcurrentHashMap<String, UUID>()
 
     fun clear() {
+        lastBattleId = null
         currentTurn = 0
         weather = null
         terrain = null

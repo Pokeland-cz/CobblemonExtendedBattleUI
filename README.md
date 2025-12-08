@@ -35,7 +35,7 @@ This mod does not give you any information that you could not otherwise have obt
 
 - **V or Click header** - Show/hide the detailed panel
 - **Drag the header** - Move the panel anywhere on screen
-- **CTRL + Scroll wheel or [ and ]** - Scroll up or press ] to increase font size, scroll down or press [ to decrease it
+- **CTRL + Scroll wheel or [ and ]** - Scroll up or press ] to increase font size, scroll down or press [ to decrease it (the [ and ] keys are taken from a US keyboard layout, they will by default be the corresponding keys in your keyboard language)
 - **Drag sides or corners** - Resize panel
 
 You can also rebind these keys to anything you want within the keybind settings menu.

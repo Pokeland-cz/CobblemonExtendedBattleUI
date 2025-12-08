@@ -199,17 +199,24 @@ object BattleInfoPanel {
         return mouseY >= thumbY && mouseY <= thumbY + thumbHeight
     }
 
+    private fun isKeyOrButtonPressed(handle: Long, key: InputUtil.Key): Boolean {
+        return when (key.category) {
+            InputUtil.Type.MOUSE -> GLFW.glfwGetMouseButton(handle, key.code) == GLFW.GLFW_PRESS
+            else -> GLFW.glfwGetKey(handle, key.code) == GLFW.GLFW_PRESS
+        }
+    }
+
     private fun handleInput(mc: MinecraftClient) {
         val handle = mc.window.handle
 
         // Poll keybinds directly with GLFW (Minecraft's keybinding system doesn't work during Cobblemon battle overlay)
         val toggleKey = InputUtil.fromTranslationKey(CobblemonExtendedBattleUIClient.togglePanelKey.boundKeyTranslationKey)
-        val isToggleDown = GLFW.glfwGetKey(handle, toggleKey.code) == GLFW.GLFW_PRESS
+        val isToggleDown = isKeyOrButtonPressed(handle, toggleKey)
         if (isToggleDown && !wasToggleKeyPressed) toggle()
         wasToggleKeyPressed = isToggleDown
 
         val increaseKey = InputUtil.fromTranslationKey(CobblemonExtendedBattleUIClient.increaseFontKey.boundKeyTranslationKey)
-        val isIncreaseDown = GLFW.glfwGetKey(handle, increaseKey.code) == GLFW.GLFW_PRESS
+        val isIncreaseDown = isKeyOrButtonPressed(handle, increaseKey)
         if (isIncreaseDown && !wasIncreaseFontKeyPressed) {
             PanelConfig.adjustFontScale(PanelConfig.FONT_SCALE_STEP)
             PanelConfig.save()
@@ -217,7 +224,7 @@ object BattleInfoPanel {
         wasIncreaseFontKeyPressed = isIncreaseDown
 
         val decreaseKey = InputUtil.fromTranslationKey(CobblemonExtendedBattleUIClient.decreaseFontKey.boundKeyTranslationKey)
-        val isDecreaseDown = GLFW.glfwGetKey(handle, decreaseKey.code) == GLFW.GLFW_PRESS
+        val isDecreaseDown = isKeyOrButtonPressed(handle, decreaseKey)
         if (isDecreaseDown && !wasDecreaseFontKeyPressed) {
             PanelConfig.adjustFontScale(-PanelConfig.FONT_SCALE_STEP)
             PanelConfig.save()
@@ -419,6 +426,9 @@ object BattleInfoPanel {
     fun render(context: DrawContext) {
         val battle = CobblemonClient.battle ?: return
         if (battle.minimised) return
+
+        // Clear state if this is a new battle
+        BattleStateTracker.checkBattleChanged(battle.battleId)
 
         val mc = MinecraftClient.getInstance()
         handleInput(mc)
