@@ -1,6 +1,6 @@
-package com.cobblemonbattleui.mixin;
+package com.cobblemonextendedbattleui.mixin;
 
-import com.cobblemonbattleui.BattleInfoPanel;
+import com.cobblemonextendedbattleui.BattleInfoPanel;
 import com.cobblemon.mod.common.client.CobblemonClient;
 import net.minecraft.client.Mouse;
 import org.spongepowered.asm.mixin.Mixin;

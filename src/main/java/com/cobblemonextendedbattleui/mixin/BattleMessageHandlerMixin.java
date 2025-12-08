@@ -1,4 +1,4 @@
-package com.cobblemonbattleui.mixin;
+package com.cobblemonextendedbattleui.mixin;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.cobblemon.mod.common.client.net.battle.BattleMessageHandler;
 import com.cobblemon.mod.common.net.messages.client.battle.BattleMessagePacket;
-import com.cobblemonbattleui.BattleMessageInterceptor;
+import com.cobblemonextendedbattleui.BattleMessageInterceptor;
 import net.minecraft.client.MinecraftClient;
 
 /**

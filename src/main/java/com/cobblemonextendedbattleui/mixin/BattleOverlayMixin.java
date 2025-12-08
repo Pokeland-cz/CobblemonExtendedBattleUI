@@ -1,4 +1,4 @@
-package com.cobblemonbattleui.mixin;
+package com.cobblemonextendedbattleui.mixin;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -6,7 +6,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.cobblemon.mod.common.client.gui.battle.BattleOverlay;
-import com.cobblemonbattleui.BattleInfoRenderer;
+import com.cobblemonextendedbattleui.BattleInfoRenderer;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.gui.DrawContext;
 

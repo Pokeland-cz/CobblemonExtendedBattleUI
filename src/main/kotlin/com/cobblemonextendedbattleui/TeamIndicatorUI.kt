@@ -1,4 +1,4 @@
-package com.cobblemonbattleui
+package com.cobblemonextendedbattleui
 
 import com.cobblemon.mod.common.api.pokemon.status.Statuses
 import com.cobblemon.mod.common.api.pokemon.status.Status

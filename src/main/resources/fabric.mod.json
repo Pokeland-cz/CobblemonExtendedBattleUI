@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "cobblemonbattleui",
+  "id": "cobblemonextendedbattleui",
   "version": "${version}",
-  "name": "Cobblemon Battle UI",
+  "name": "Cobblemon Extended Battle UI",
   "description": "Customizes and enhances the Cobblemon battle UI",
   "authors": ["sverre"],
   "contact": {
@@ -10,26 +10,26 @@
     "sources": ""
   },
   "license": "MIT",
-  "icon": "assets/cobblemonbattleui/icon.png",
+  "icon": "assets/cobblemonextendedbattleui/icon.png",
   "environment": "client",
   "entrypoints": {
     "client": [
       {
         "adapter": "kotlin",
-        "value": "com.cobblemonbattleui.CobblemonBattleUIClient"
+        "value": "com.cobblemonextendedbattleui.CobblemonExtendedBattleUIClient"
       }
     ],
     "main": [
       {
         "adapter": "kotlin",
-        "value": "com.cobblemonbattleui.CobblemonBattleUI"
+        "value": "com.cobblemonextendedbattleui.CobblemonExtendedBattleUI"
       }
     ]
   },
   "mixins": [
-    "cobblemonbattleui.mixins.json"
+    "cobblemonextendedbattleui.mixins.json"
   ],
-  "accessWidener": "cobblemonbattleui.accesswidener",
+  "accessWidener": "cobblemonextendedbattleui.accesswidener",
   "depends": {
     "fabricloader": ">=0.16.0",
     "fabric-api": "*",

@@ -1,4 +1,4 @@
-package com.cobblemonbattleui
+package com.cobblemonextendedbattleui
 
 import net.minecraft.text.Text
 import net.minecraft.text.TranslatableTextContent
@@ -132,7 +132,7 @@ object BattleMessageInterceptor {
 
             // Debug: Log all battle-related translation keys
             if (key.startsWith("cobblemon.battle.")) {
-                CobblemonBattleUI.LOGGER.info("BattleMessage: key='$key', args=${args.map {
+                CobblemonExtendedBattleUI.LOGGER.info("BattleMessage: key='$key', args=${args.map {
                     when (it) {
                         is Text -> it.string
                         else -> it.toString()
@@ -227,7 +227,7 @@ object BattleMessageInterceptor {
 
     private fun extractStatChange(args: Array<out Any>, stages: Int) {
         if (args.size < 2) {
-            CobblemonBattleUI.LOGGER.debug("BattleMessageInterceptor: Not enough args for stat change: ${args.size}")
+            CobblemonExtendedBattleUI.LOGGER.debug("BattleMessageInterceptor: Not enough args for stat change: ${args.size}")
             return
         }
 
@@ -243,7 +243,7 @@ object BattleMessageInterceptor {
             else -> arg1.toString()
         }
 
-        CobblemonBattleUI.LOGGER.debug("BattleMessageInterceptor: Stat change - $pokemonName $statName ${if (stages > 0) "+" else ""}$stages")
+        CobblemonExtendedBattleUI.LOGGER.debug("BattleMessageInterceptor: Stat change - $pokemonName $statName ${if (stages > 0) "+" else ""}$stages")
         BattleStateTracker.applyStatChange(pokemonName, statName, stages)
     }
 }

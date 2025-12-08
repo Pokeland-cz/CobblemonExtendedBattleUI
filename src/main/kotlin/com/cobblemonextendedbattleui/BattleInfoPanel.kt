@@ -1,4 +1,4 @@
-package com.cobblemonbattleui
+package com.cobblemonextendedbattleui
 
 import com.cobblemon.mod.common.client.CobblemonClient
 import com.cobblemon.mod.common.client.render.drawScaledText

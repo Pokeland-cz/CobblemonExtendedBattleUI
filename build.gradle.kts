@@ -70,10 +70,10 @@ tasks.jar {
 
 // Configure Loom
 loom {
-    accessWidenerPath.set(file("src/main/resources/cobblemonbattleui.accesswidener"))
+    accessWidenerPath.set(file("src/main/resources/cobblemonextendedbattleui.accesswidener"))
 
     mixin {
-        defaultRefmapName.set("cobblemonbattleui-refmap.json")
+        defaultRefmapName.set("cobblemonextendedbattleui-refmap.json")
     }
 }
 

@@ -6,4 +6,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "CobblemonBattleUI"
+rootProject.name = "CobblemonExtendedBattleUI"

@@ -1,4 +1,4 @@
-package com.cobblemonbattleui
+package com.cobblemonextendedbattleui
 
 import net.minecraft.client.gui.DrawContext
 

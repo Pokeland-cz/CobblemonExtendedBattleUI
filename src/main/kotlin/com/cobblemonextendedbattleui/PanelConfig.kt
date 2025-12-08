@@ -1,4 +1,4 @@
-package com.cobblemonbattleui
+package com.cobblemonextendedbattleui
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -12,7 +12,7 @@ import java.io.File
 object PanelConfig {
     private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
     private val configFile: File by lazy {
-        FabricLoader.getInstance().configDir.resolve("cobblemonbattleui.json").toFile()
+        FabricLoader.getInstance().configDir.resolve("cobblemonextendedbattleui.json").toFile()
     }
 
     // Panel position (null = default right-center position)
@@ -49,10 +49,10 @@ object PanelConfig {
                 panelY = data.panelY
                 scale = data.scale.coerceIn(MIN_SCALE, MAX_SCALE)
                 startExpanded = data.startExpanded
-                CobblemonBattleUI.LOGGER.info("PanelConfig: Loaded config - pos=(${panelX}, ${panelY}), scale=$scale")
+                CobblemonExtendedBattleUI.LOGGER.info("PanelConfig: Loaded config - pos=(${panelX}, ${panelY}), scale=$scale")
             }
         } catch (e: Exception) {
-            CobblemonBattleUI.LOGGER.warn("PanelConfig: Failed to load config, using defaults: ${e.message}")
+            CobblemonExtendedBattleUI.LOGGER.warn("PanelConfig: Failed to load config, using defaults: ${e.message}")
         }
     }
 
@@ -61,9 +61,9 @@ object PanelConfig {
             val data = ConfigData(panelX, panelY, scale, startExpanded)
             configFile.parentFile?.mkdirs()
             configFile.writeText(gson.toJson(data))
-            CobblemonBattleUI.LOGGER.debug("PanelConfig: Saved config")
+            CobblemonExtendedBattleUI.LOGGER.debug("PanelConfig: Saved config")
         } catch (e: Exception) {
-            CobblemonBattleUI.LOGGER.warn("PanelConfig: Failed to save config: ${e.message}")
+            CobblemonExtendedBattleUI.LOGGER.warn("PanelConfig: Failed to save config: ${e.message}")
         }
     }
 

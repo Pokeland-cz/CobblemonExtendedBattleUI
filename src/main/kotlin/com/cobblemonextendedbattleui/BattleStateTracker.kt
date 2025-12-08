@@ -1,4 +1,4 @@
-package com.cobblemonbattleui
+package com.cobblemonextendedbattleui
 
 import com.cobblemon.mod.common.api.pokemon.stats.Stat
 import com.cobblemon.mod.common.api.pokemon.stats.Stats
@@ -96,26 +96,26 @@ object BattleStateTracker {
         opponentSideConditions.clear()
         statChanges.clear()
         nameToUuid.clear()
-        CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Cleared all state")
+        CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Cleared all state")
     }
 
     fun setTurn(turn: Int) {
         currentTurn = turn
         checkForExpiredConditions()
-        CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Turn $turn")
+        CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Turn $turn")
     }
 
     fun setWeather(type: Weather) {
         val effectiveStartTurn = maxOf(1, currentTurn)
         weather = WeatherState(type, effectiveStartTurn)
-        CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Weather set to ${type.displayName} on turn $effectiveStartTurn")
+        CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Weather set to ${type.displayName} on turn $effectiveStartTurn")
     }
 
     fun clearWeather() {
         val prev = weather
         weather = null
         if (prev != null) {
-            CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Weather ${prev.type.displayName} ended on turn $currentTurn")
+            CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Weather ${prev.type.displayName} ended on turn $currentTurn")
         }
     }
 
@@ -140,14 +140,14 @@ object BattleStateTracker {
     fun setTerrain(type: Terrain) {
         val effectiveStartTurn = maxOf(1, currentTurn)
         terrain = TerrainState(type, effectiveStartTurn)
-        CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Terrain set to ${type.displayName} on turn $effectiveStartTurn")
+        CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Terrain set to ${type.displayName} on turn $effectiveStartTurn")
     }
 
     fun clearTerrain() {
         val prev = terrain
         terrain = null
         if (prev != null) {
-            CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Terrain ${prev.type.displayName} ended on turn $currentTurn")
+            CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Terrain ${prev.type.displayName} ended on turn $currentTurn")
         }
     }
 
@@ -171,12 +171,12 @@ object BattleStateTracker {
     fun setFieldCondition(type: FieldCondition) {
         val effectiveStartTurn = maxOf(1, currentTurn)
         fieldConditions[type] = FieldConditionState(type, effectiveStartTurn)
-        CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Field condition ${type.displayName} started on turn $effectiveStartTurn")
+        CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Field condition ${type.displayName} started on turn $effectiveStartTurn")
     }
 
     fun clearFieldCondition(type: FieldCondition) {
         fieldConditions.remove(type)
-        CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Field condition ${type.displayName} ended")
+        CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Field condition ${type.displayName} ended")
     }
 
     fun getFieldConditions(): Map<FieldCondition, FieldConditionState> = fieldConditions.toMap()
@@ -196,17 +196,17 @@ object BattleStateTracker {
         if (existing != null && type.maxStacks > 1) {
             // Stack the condition (e.g., multiple layers of Spikes)
             existing.stacks = (existing.stacks + 1).coerceAtMost(type.maxStacks)
-            CobblemonBattleUI.LOGGER.debug("BattleStateTracker: ${if (isPlayerSide) "Player" else "Opponent"} ${type.displayName} stacked to ${existing.stacks}")
+            CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: ${if (isPlayerSide) "Player" else "Opponent"} ${type.displayName} stacked to ${existing.stacks}")
         } else {
             conditions[type] = SideConditionState(type, effectiveStartTurn)
-            CobblemonBattleUI.LOGGER.debug("BattleStateTracker: ${if (isPlayerSide) "Player" else "Opponent"} ${type.displayName} started on turn $effectiveStartTurn")
+            CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: ${if (isPlayerSide) "Player" else "Opponent"} ${type.displayName} started on turn $effectiveStartTurn")
         }
     }
 
     fun clearSideCondition(isPlayerSide: Boolean, type: SideCondition) {
         val conditions = if (isPlayerSide) playerSideConditions else opponentSideConditions
         conditions.remove(type)
-        CobblemonBattleUI.LOGGER.debug("BattleStateTracker: ${if (isPlayerSide) "Player" else "Opponent"} ${type.displayName} ended")
+        CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: ${if (isPlayerSide) "Player" else "Opponent"} ${type.displayName} ended")
     }
 
     fun getPlayerSideConditions(): Map<SideCondition, SideConditionState> = playerSideConditions.toMap()
@@ -258,12 +258,12 @@ object BattleStateTracker {
         }
 
         if (uuid == null) {
-            CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Unknown Pokemon '$pokemonName'")
+            CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Unknown Pokemon '$pokemonName'")
             return
         }
 
         val stat = getStatFromName(statName) ?: run {
-            CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Unknown stat '$statName'")
+            CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Unknown stat '$statName'")
             return
         }
 
@@ -272,7 +272,7 @@ object BattleStateTracker {
         val newStage = (currentStage + stages).coerceIn(-6, 6)
         pokemonStats[stat] = newStage
 
-        CobblemonBattleUI.LOGGER.debug("BattleStateTracker: $pokemonName $statName ${if (stages > 0) "+" else ""}$stages (now at $newStage)")
+        CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: $pokemonName $statName ${if (stages > 0) "+" else ""}$stages (now at $newStage)")
     }
 
     fun clearPokemonStats(uuid: UUID) {
@@ -286,7 +286,7 @@ object BattleStateTracker {
             val turnsElapsed = currentTurn - w.startTurn
             if (turnsElapsed >= 5 && !w.confirmedExtended) {
                 w.confirmedExtended = true
-                CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Weather confirmed extended (still active after 5 turns)")
+                CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Weather confirmed extended (still active after 5 turns)")
             }
         }
 
@@ -294,7 +294,7 @@ object BattleStateTracker {
             val turnsElapsed = currentTurn - t.startTurn
             if (turnsElapsed >= 5 && !t.confirmedExtended) {
                 t.confirmedExtended = true
-                CobblemonBattleUI.LOGGER.debug("BattleStateTracker: Terrain confirmed extended (still active after 5 turns)")
+                CobblemonExtendedBattleUI.LOGGER.debug("BattleStateTracker: Terrain confirmed extended (still active after 5 turns)")
             }
         }
 
