@@ -1,0 +1,900 @@
+package com.cobblemonextendedbattleui
+
+import com.cobblemon.mod.common.client.CobblemonClient
+import com.cobblemon.mod.common.client.render.drawScaledText
+import com.cobblemon.mod.common.util.cobblemonResource
+import com.mojang.blaze3d.systems.RenderSystem
+import net.minecraft.client.MinecraftClient
+import net.minecraft.client.gui.DrawContext
+import net.minecraft.client.util.InputUtil
+import net.minecraft.text.Text
+import net.minecraft.util.Identifier
+import org.lwjgl.glfw.GLFW
+
+/**
+ * Battle log widget styled to match Cobblemon's visual aesthetic.
+ * Uses Cobblemon's actual textures with 9-slice rendering for resize support.
+ *
+ * Features:
+ * - Moveable (drag from header)
+ * - Resizable (drag from edges/corners) with 9-slice texture rendering
+ * - Font size adjustable ([ and ] keys, or Ctrl+Scroll when hovering)
+ * - Expandable/collapsible
+ * - Turn separators
+ * - Scrollable content
+ */
+object BattleLogWidget {
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Cobblemon textures
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private val FRAME_TEXTURE: Identifier = cobblemonResource("textures/gui/battle/battle_log.png")
+    private val FRAME_EXPANDED_TEXTURE: Identifier = cobblemonResource("textures/gui/battle/battle_log_expanded.png")
+
+    // Original texture dimensions
+    private const val TEXTURE_WIDTH = 169
+    private const val TEXTURE_HEIGHT_COLLAPSED = 55
+    private const val TEXTURE_HEIGHT_EXPANDED = 101
+
+    // 9-slice border sizes (how much of the texture edges to preserve)
+    private const val SLICE_LEFT = 6
+    private const val SLICE_RIGHT = 6
+    private const val SLICE_TOP = 6
+    private const val SLICE_BOTTOM = 6
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Layout constants
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private const val HEADER_HEIGHT = 16
+    private const val COLLAPSED_HEIGHT = 70  // Small preset size
+    private const val PADDING = 6
+    private const val LOG_TEXT_INDENT = 4    // Extra indent for log entries
+    private const val BASE_LINE_HEIGHT = 11
+    private const val RESIZE_HANDLE_SIZE = 5
+    private const val SCROLLBAR_WIDTH = 3
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Colors - matching Cobblemon's battle log style
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private fun color(r: Int, g: Int, b: Int, a: Int = 255): Int = (a shl 24) or (r shl 16) or (g shl 8) or b
+
+    // Text colors
+    private val TEXT_DIM = color(150, 160, 175)
+
+    // Entry type colors
+    private val COLOR_MOVE = color(255, 255, 255)
+    private val COLOR_HP = color(120, 195, 255)
+    private val COLOR_HEALING = color(100, 220, 100)  // Green for healing
+    private val COLOR_EFFECT = color(255, 215, 90)
+    private val COLOR_FIELD = color(160, 255, 160)
+    private val COLOR_OTHER = color(175, 175, 185)
+
+    // Turn separator - subtle styling that blends with Cobblemon texture
+    private val TURN_LINE_COLOR = color(90, 100, 120, 100)  // Very subtle, semi-transparent
+    private val TURN_TEXT_COLOR = color(160, 150, 130)      // Muted gold/tan to match texture
+
+    // Scrollbar
+    private val SCROLLBAR_BG = color(30, 38, 50, 180)
+    private val SCROLLBAR_THUMB = color(80, 100, 130, 220)
+
+    // Resize handles
+    private val RESIZE_HANDLE_COLOR = color(80, 100, 130, 180)
+    private val RESIZE_HANDLE_HOVER = color(120, 150, 190, 255)
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // State
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private var scrollOffset: Int = 0
+    private var contentHeight: Int = 0
+    private var visibleHeight: Int = 0
+
+    // Auto-scroll tracking: if user is at/near bottom, auto-follow new content
+    private var isFollowingBottom: Boolean = true
+    private const val BOTTOM_THRESHOLD = 5  // Pixels from bottom to consider "at bottom"
+
+    // Input tracking
+    private var wasMousePressed: Boolean = false
+    private var wasIncreaseFontKeyPressed: Boolean = false
+    private var wasDecreaseFontKeyPressed: Boolean = false
+
+    // Dragging state
+    private var isDragging: Boolean = false
+    private var dragOffsetX: Int = 0
+    private var dragOffsetY: Int = 0
+
+    // Resize state
+    private var isResizing: Boolean = false
+    private var resizeZone: UIUtils.ResizeZone = UIUtils.ResizeZone.NONE
+    private var resizeStartX: Int = 0
+    private var resizeStartY: Int = 0
+    private var resizeStartWidth: Int = 0
+    private var resizeStartHeight: Int = 0
+    private var resizeStartPanelX: Int = 0
+    private var resizeStartPanelY: Int = 0
+
+    // Hover state
+    private var hoveredZone: UIUtils.ResizeZone = UIUtils.ResizeZone.NONE
+
+    // Bounds for click detection
+    private var widgetX: Int = 0
+    private var widgetY: Int = 0
+    private var widgetW: Int = 0
+    private var widgetH: Int = 0
+    private var headerEndY: Int = 0
+
+    // Scissor bounds
+    private var scissorMinY: Int = 0
+    private var scissorMaxY: Int = 0
+
+    // Computed line height based on font scale
+    private var lineHeight: Int = BASE_LINE_HEIGHT
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Public API
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    fun render(context: DrawContext) {
+        if (!PanelConfig.replaceBattleLog) return
+        val battle = CobblemonClient.battle ?: return
+        if (battle.minimised) return
+
+        val mc = MinecraftClient.getInstance()
+
+        // Update line height based on font scale
+        lineHeight = (BASE_LINE_HEIGHT * PanelConfig.logFontScale).toInt().coerceAtLeast(8)
+
+        handleInput(mc)
+
+        val screenWidth = mc.window.scaledWidth
+        val screenHeight = mc.window.scaledHeight
+
+        val isExpanded = PanelConfig.logExpanded
+
+        // Get dimensions from config or use defaults
+        val width = PanelConfig.logWidth ?: PanelConfig.DEFAULT_LOG_WIDTH
+        val expandedHeight = PanelConfig.logHeight ?: PanelConfig.DEFAULT_LOG_HEIGHT
+        val height = if (isExpanded) expandedHeight else COLLAPSED_HEIGHT
+
+        // Default position: bottom right, above battle controls
+        // We track position by BOTTOM edge so collapse/expand keeps bottom fixed
+        val defaultX = screenWidth - width - 10  // 10px from right edge
+        val defaultBottomY = screenHeight - 55  // Bottom edge position
+
+        // Calculate Y from bottom edge (collapse downwards behavior)
+        val bottomY = (PanelConfig.logY ?: (defaultBottomY - expandedHeight)) + expandedHeight
+        val y = (bottomY - height).coerceIn(0, screenHeight - height)
+        val x = (PanelConfig.logX ?: defaultX).coerceIn(0, screenWidth - width)
+
+        widgetX = x
+        widgetY = y
+        widgetW = width
+        widgetH = height
+
+        // Render frame using 9-slice with Cobblemon textures
+        renderFrame9Slice(context, x, y, width, height, isExpanded)
+        // Flush texture batch before any fill operations
+        context.draw()
+        headerEndY = y + HEADER_HEIGHT
+
+        // Always render the same content - "collapsed" is just a smaller preset size
+        renderContent(context, x, y, width, height)
+
+        // Resize handles only when expanded (full size mode allows resizing)
+        if (isExpanded && (hoveredZone != UIUtils.ResizeZone.NONE || isResizing)) {
+            renderResizeHandles(context, x, y, width, height)
+        }
+    }
+
+    fun onScroll(mouseX: Double, mouseY: Double, deltaY: Double): Boolean {
+        if (!PanelConfig.replaceBattleLog) return false
+
+        val mc = MinecraftClient.getInstance()
+        val scaledX = (mouseX * mc.window.scaledWidth / mc.window.width).toInt()
+        val scaledY = (mouseY * mc.window.scaledHeight / mc.window.height).toInt()
+
+        val isOver = scaledX >= widgetX && scaledX <= widgetX + widgetW &&
+                scaledY >= widgetY && scaledY <= widgetY + widgetH
+
+        if (!isOver) return false
+
+        // Ctrl+Scroll for font size
+        val handle = mc.window.handle
+        val ctrlDown = GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS ||
+                GLFW.glfwGetKey(handle, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS
+
+        if (ctrlDown) {
+            val delta = if (deltaY > 0) PanelConfig.FONT_SCALE_STEP else -PanelConfig.FONT_SCALE_STEP
+            PanelConfig.adjustLogFontScale(delta)
+            BattleLog.invalidateWrappedTextCache()  // Font scale changed, invalidate cache
+            PanelConfig.save()
+            return true
+        }
+
+        // Regular scroll
+        if (contentHeight > visibleHeight) {
+            val scrollAmount = (lineHeight * 2 * if (deltaY > 0) -1 else 1)
+            val maxScroll = (contentHeight - visibleHeight).coerceAtLeast(0)
+            scrollOffset = (scrollOffset + scrollAmount).coerceIn(0, maxScroll)
+
+            // Update follow state: if user scrolled to bottom, start following again
+            // If user scrolled up away from bottom, stop following
+            isFollowingBottom = scrollOffset >= maxScroll - BOTTOM_THRESHOLD
+            return true
+        }
+        return false
+    }
+
+    fun clear() {
+        scrollOffset = 0
+        isFollowingBottom = true
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 9-Slice Texture Rendering
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Renders the frame using 9-slice technique with Cobblemon's textures.
+     * This allows the texture to be stretched to any size while preserving
+     * the corners and edges properly.
+     *
+     * Uses DrawContext.drawTexture which properly stretches (not tiles) when
+     * render size differs from source region size.
+     */
+    private fun renderFrame9Slice(context: DrawContext, x: Int, y: Int, width: Int, height: Int, isExpanded: Boolean) {
+        val texture = if (isExpanded) FRAME_EXPANDED_TEXTURE else FRAME_TEXTURE
+        val texH = if (isExpanded) TEXTURE_HEIGHT_EXPANDED else TEXTURE_HEIGHT_COLLAPSED
+
+        // Calculate the sizes of the center regions in the texture
+        val centerTexW = TEXTURE_WIDTH - SLICE_LEFT - SLICE_RIGHT
+        val centerTexH = texH - SLICE_TOP - SLICE_BOTTOM
+
+        // Calculate the sizes of the center regions in the render
+        val centerW = width - SLICE_LEFT - SLICE_RIGHT
+        val centerH = height - SLICE_TOP - SLICE_BOTTOM
+
+        // Top-left corner (no stretching needed)
+        context.drawTexture(
+            texture,
+            x, y,                           // render position
+            SLICE_LEFT, SLICE_TOP,          // render size
+            0f, 0f,                         // UV offset
+            SLICE_LEFT, SLICE_TOP,          // source region size
+            TEXTURE_WIDTH, texH             // full texture size
+        )
+
+        // Top-right corner
+        context.drawTexture(
+            texture,
+            x + width - SLICE_RIGHT, y,
+            SLICE_RIGHT, SLICE_TOP,
+            (TEXTURE_WIDTH - SLICE_RIGHT).toFloat(), 0f,
+            SLICE_RIGHT, SLICE_TOP,
+            TEXTURE_WIDTH, texH
+        )
+
+        // Bottom-left corner
+        context.drawTexture(
+            texture,
+            x, y + height - SLICE_BOTTOM,
+            SLICE_LEFT, SLICE_BOTTOM,
+            0f, (texH - SLICE_BOTTOM).toFloat(),
+            SLICE_LEFT, SLICE_BOTTOM,
+            TEXTURE_WIDTH, texH
+        )
+
+        // Bottom-right corner
+        context.drawTexture(
+            texture,
+            x + width - SLICE_RIGHT, y + height - SLICE_BOTTOM,
+            SLICE_RIGHT, SLICE_BOTTOM,
+            (TEXTURE_WIDTH - SLICE_RIGHT).toFloat(), (texH - SLICE_BOTTOM).toFloat(),
+            SLICE_RIGHT, SLICE_BOTTOM,
+            TEXTURE_WIDTH, texH
+        )
+
+        // Top edge (stretched horizontally)
+        if (centerW > 0) {
+            context.drawTexture(
+                texture,
+                x + SLICE_LEFT, y,              // render position
+                centerW, SLICE_TOP,             // render size (stretched width)
+                SLICE_LEFT.toFloat(), 0f,       // UV offset
+                centerTexW, SLICE_TOP,          // source region size
+                TEXTURE_WIDTH, texH
+            )
+        }
+
+        // Bottom edge (stretched horizontally)
+        if (centerW > 0) {
+            context.drawTexture(
+                texture,
+                x + SLICE_LEFT, y + height - SLICE_BOTTOM,
+                centerW, SLICE_BOTTOM,
+                SLICE_LEFT.toFloat(), (texH - SLICE_BOTTOM).toFloat(),
+                centerTexW, SLICE_BOTTOM,
+                TEXTURE_WIDTH, texH
+            )
+        }
+
+        // Left edge (stretched vertically)
+        if (centerH > 0) {
+            context.drawTexture(
+                texture,
+                x, y + SLICE_TOP,
+                SLICE_LEFT, centerH,            // render size (stretched height)
+                0f, SLICE_TOP.toFloat(),
+                SLICE_LEFT, centerTexH,         // source region size
+                TEXTURE_WIDTH, texH
+            )
+        }
+
+        // Right edge (stretched vertically)
+        if (centerH > 0) {
+            context.drawTexture(
+                texture,
+                x + width - SLICE_RIGHT, y + SLICE_TOP,
+                SLICE_RIGHT, centerH,
+                (TEXTURE_WIDTH - SLICE_RIGHT).toFloat(), SLICE_TOP.toFloat(),
+                SLICE_RIGHT, centerTexH,
+                TEXTURE_WIDTH, texH
+            )
+        }
+
+        // Center (stretched both ways)
+        if (centerW > 0 && centerH > 0) {
+            context.drawTexture(
+                texture,
+                x + SLICE_LEFT, y + SLICE_TOP,
+                centerW, centerH,               // render size (stretched both)
+                SLICE_LEFT.toFloat(), SLICE_TOP.toFloat(),
+                centerTexW, centerTexH,         // source region size
+                TEXTURE_WIDTH, texH
+            )
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Input handling
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private fun handleInput(mc: MinecraftClient) {
+        val handle = mc.window.handle
+        val mouseX = (mc.mouse.x * mc.window.scaledWidth / mc.window.width).toInt()
+        val mouseY = (mc.mouse.y * mc.window.scaledHeight / mc.window.height).toInt()
+        val isMouseDown = GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS
+
+        val screenWidth = mc.window.scaledWidth
+        val screenHeight = mc.window.scaledHeight
+
+        // Check if mouse is over this widget for keybind handling
+        val isOverWidget = mouseX >= widgetX && mouseX <= widgetX + widgetW &&
+                mouseY >= widgetY && mouseY <= widgetY + widgetH
+
+        // Font size keybinds (only when hovering over widget)
+        if (isOverWidget) {
+            handleFontKeybinds(handle)
+        }
+
+        // Only update hover state when this panel can interact
+        val canInteract = UIUtils.canInteract(UIUtils.ActivePanel.BATTLE_LOG)
+        if (!isDragging && !isResizing && canInteract) {
+            hoveredZone = getResizeZone(mouseX, mouseY)
+        } else if (!canInteract) {
+            hoveredZone = UIUtils.ResizeZone.NONE
+        }
+
+        val isOverHeader = isOverWidget && mouseY <= headerEndY
+
+        // Expand/collapse toggle zone (bottom-right corner, matching Cobblemon's arrow location)
+        val toggleZoneX = widgetX + widgetW - 16
+        val toggleZoneY = widgetY + widgetH - 14
+        val isOverToggle = mouseX >= toggleZoneX && mouseX <= toggleZoneX + 14 &&
+                mouseY >= toggleZoneY && mouseY <= toggleZoneY + 12
+
+        if (isMouseDown) {
+            when {
+                // Toggle expand/collapse
+                !wasMousePressed && isOverToggle -> {
+                    PanelConfig.setLogExpanded(!PanelConfig.logExpanded)
+                    scrollOffset = 0
+                    isFollowingBottom = true  // Reset to following on toggle
+                    PanelConfig.save()
+                }
+                // Start resize
+                !wasMousePressed && canInteract && hoveredZone != UIUtils.ResizeZone.NONE -> {
+                    UIUtils.claimInteraction(UIUtils.ActivePanel.BATTLE_LOG)
+                    isResizing = true
+                    resizeZone = hoveredZone
+                    resizeStartX = mouseX
+                    resizeStartY = mouseY
+                    resizeStartWidth = widgetW
+                    resizeStartHeight = widgetH
+                    resizeStartPanelX = widgetX
+                    resizeStartPanelY = widgetY
+                }
+                // Continue resizing
+                isResizing -> {
+                    handleResize(mouseX, mouseY, screenWidth, screenHeight)
+                }
+                // Start dragging (from header, excluding toggle)
+                !wasMousePressed && canInteract && isOverHeader && !isOverToggle -> {
+                    UIUtils.claimInteraction(UIUtils.ActivePanel.BATTLE_LOG)
+                    isDragging = true
+                    dragOffsetX = mouseX - widgetX
+                    dragOffsetY = mouseY - widgetY
+                }
+                // Continue dragging
+                isDragging -> {
+                    val newX = (mouseX - dragOffsetX).coerceIn(0, screenWidth - widgetW)
+                    val newY = (mouseY - dragOffsetY).coerceIn(0, screenHeight - widgetH)
+                    PanelConfig.setLogPosition(newX, newY)
+                }
+            }
+        } else {
+            // Release interaction when mouse is released
+            val wasInteracting = isDragging || isResizing
+            if (wasInteracting) {
+                PanelConfig.save()
+                UIUtils.releaseInteraction(UIUtils.ActivePanel.BATTLE_LOG)
+            }
+            isDragging = false
+            isResizing = false
+        }
+
+        wasMousePressed = isMouseDown
+    }
+
+    private fun handleFontKeybinds(handle: Long) {
+        val increaseKey = InputUtil.fromTranslationKey(CobblemonExtendedBattleUIClient.increaseFontKey.boundKeyTranslationKey)
+        val isIncreaseDown = isKeyOrButtonPressed(handle, increaseKey)
+        if (isIncreaseDown && !wasIncreaseFontKeyPressed) {
+            PanelConfig.adjustLogFontScale(PanelConfig.FONT_SCALE_STEP)
+            BattleLog.invalidateWrappedTextCache()  // Font scale changed, invalidate cache
+            PanelConfig.save()
+        }
+        wasIncreaseFontKeyPressed = isIncreaseDown
+
+        val decreaseKey = InputUtil.fromTranslationKey(CobblemonExtendedBattleUIClient.decreaseFontKey.boundKeyTranslationKey)
+        val isDecreaseDown = isKeyOrButtonPressed(handle, decreaseKey)
+        if (isDecreaseDown && !wasDecreaseFontKeyPressed) {
+            PanelConfig.adjustLogFontScale(-PanelConfig.FONT_SCALE_STEP)
+            BattleLog.invalidateWrappedTextCache()  // Font scale changed, invalidate cache
+            PanelConfig.save()
+        }
+        wasDecreaseFontKeyPressed = isDecreaseDown
+    }
+
+    private fun isKeyOrButtonPressed(handle: Long, key: InputUtil.Key): Boolean {
+        return when (key.category) {
+            InputUtil.Type.MOUSE -> GLFW.glfwGetMouseButton(handle, key.code) == GLFW.GLFW_PRESS
+            else -> GLFW.glfwGetKey(handle, key.code) == GLFW.GLFW_PRESS
+        }
+    }
+
+    private fun getResizeZone(mouseX: Int, mouseY: Int): UIUtils.ResizeZone {
+        // Only allow resize in expanded mode
+        if (!PanelConfig.logExpanded) return UIUtils.ResizeZone.NONE
+
+        val x = widgetX
+        val y = widgetY
+        val w = widgetW
+        val h = widgetH
+
+        // Corner detection zones (L-shaped areas around corners)
+        val cornerSize = 15  // Size of the corner detection zone
+
+        val nearLeft = mouseX >= x - RESIZE_HANDLE_SIZE && mouseX <= x + cornerSize
+        val nearRight = mouseX >= x + w - cornerSize && mouseX <= x + w + RESIZE_HANDLE_SIZE
+        val nearTop = mouseY >= y - RESIZE_HANDLE_SIZE && mouseY <= y + cornerSize
+        val nearBottom = mouseY >= y + h - cornerSize && mouseY <= y + h + RESIZE_HANDLE_SIZE
+
+        // Edge detection (middle portions of edges)
+        val edgeZone = 8  // How close to edge to trigger
+        val onLeftEdge = mouseX >= x - edgeZone && mouseX <= x + edgeZone
+        val onRightEdge = mouseX >= x + w - edgeZone && mouseX <= x + w + edgeZone
+        val onTopEdge = mouseY >= y - edgeZone && mouseY <= y + edgeZone
+        val onBottomEdge = mouseY >= y + h - edgeZone && mouseY <= y + h + edgeZone
+
+        val withinX = mouseX >= x - RESIZE_HANDLE_SIZE && mouseX <= x + w + RESIZE_HANDLE_SIZE
+        val withinY = mouseY >= y - RESIZE_HANDLE_SIZE && mouseY <= y + h + RESIZE_HANDLE_SIZE
+
+        return when {
+            // Corners (prioritize these - L-shaped detection)
+            nearTop && nearLeft -> UIUtils.ResizeZone.TOP_LEFT
+            nearTop && nearRight -> UIUtils.ResizeZone.TOP_RIGHT
+            nearBottom && nearLeft -> UIUtils.ResizeZone.BOTTOM_LEFT
+            nearBottom && nearRight -> UIUtils.ResizeZone.BOTTOM_RIGHT
+
+            // Edges (only the middle portions)
+            onLeftEdge && withinY && !nearTop && !nearBottom -> UIUtils.ResizeZone.LEFT
+            onRightEdge && withinY && !nearTop && !nearBottom -> UIUtils.ResizeZone.RIGHT
+            onTopEdge && withinX && !nearLeft && !nearRight -> UIUtils.ResizeZone.TOP
+            onBottomEdge && withinX && !nearLeft && !nearRight -> UIUtils.ResizeZone.BOTTOM
+
+            else -> UIUtils.ResizeZone.NONE
+        }
+    }
+
+    private fun handleResize(mouseX: Int, mouseY: Int, screenWidth: Int, screenHeight: Int) {
+        val result = UIUtils.calculateResize(
+            zone = resizeZone,
+            deltaX = mouseX - resizeStartX,
+            deltaY = mouseY - resizeStartY,
+            startX = resizeStartPanelX,
+            startY = resizeStartPanelY,
+            startWidth = resizeStartWidth,
+            startHeight = resizeStartHeight,
+            minWidth = PanelConfig.MIN_LOG_WIDTH,
+            maxWidth = PanelConfig.MAX_LOG_WIDTH,
+            minHeight = PanelConfig.MIN_LOG_HEIGHT,
+            maxHeight = PanelConfig.MAX_LOG_HEIGHT,
+            screenWidth = screenWidth,
+            screenHeight = screenHeight
+        )
+
+        PanelConfig.setLogDimensions(result.newWidth, result.newHeight)
+        PanelConfig.setLogPosition(result.newX, result.newY)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Rendering
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Begins a batch of fill operations.
+     * Must call endFillBatch() after all fills are done.
+     * This flushes DrawContext's pending operations to avoid Tessellator conflicts.
+     */
+    private fun beginFillBatch(context: DrawContext) {
+        // Flush any pending texture draws before we start fills
+        // This is critical because DrawContext batches operations and shares the Tessellator
+        context.draw()
+        RenderSystem.enableBlend()
+        RenderSystem.defaultBlendFunc()
+    }
+
+    /**
+     * Ends a batch of fill operations and restores state for texture rendering.
+     */
+    private fun endFillBatch(context: DrawContext) {
+        // Flush the fills we just drew
+        context.draw()
+        // Blend stays enabled (needed for textures with alpha)
+    }
+
+    private fun renderResizeHandles(context: DrawContext, x: Int, y: Int, width: Int, height: Int) {
+        val handleColor = if (hoveredZone != UIUtils.ResizeZone.NONE || isResizing) RESIZE_HANDLE_HOVER else RESIZE_HANDLE_COLOR
+        val cornerLength = 12
+        val thickness = 2
+
+        beginFillBatch(context)
+
+        // Bottom-right corner (always visible when hovering resize zone)
+        drawCornerHandle(context, x + width, y + height, cornerLength, thickness, handleColor, bottomRight = true)
+
+        if (hoveredZone != UIUtils.ResizeZone.NONE || isResizing) {
+            // Other corners
+            drawCornerHandle(context, x, y, cornerLength, thickness, handleColor, topLeft = true)
+            drawCornerHandle(context, x + width, y, cornerLength, thickness, handleColor, topRight = true)
+            drawCornerHandle(context, x, y + height, cornerLength, thickness, handleColor, bottomLeft = true)
+
+            // Edge handles
+            val edgeLength = 16
+            val midX = x + width / 2
+            val midY = y + height / 2
+
+            // Top edge
+            context.fill(midX - edgeLength / 2, y, midX + edgeLength / 2, y + thickness, handleColor)
+            // Bottom edge
+            context.fill(midX - edgeLength / 2, y + height - thickness, midX + edgeLength / 2, y + height, handleColor)
+            // Left edge
+            context.fill(x, midY - edgeLength / 2, x + thickness, midY + edgeLength / 2, handleColor)
+            // Right edge
+            context.fill(x + width - thickness, midY - edgeLength / 2, x + width, midY + edgeLength / 2, handleColor)
+        }
+
+        endFillBatch(context)
+    }
+
+    /**
+     * Draws an L-shaped corner handle using context.fill().
+     * Must be called within a beginFillBatch/endFillBatch block.
+     */
+    private fun drawCornerHandle(
+        context: DrawContext,
+        cornerX: Int,
+        cornerY: Int,
+        length: Int,
+        thickness: Int,
+        color: Int,
+        topLeft: Boolean = false,
+        topRight: Boolean = false,
+        bottomLeft: Boolean = false,
+        bottomRight: Boolean = false
+    ) {
+        when {
+            topLeft -> {
+                context.fill(cornerX, cornerY, cornerX + length, cornerY + thickness, color)
+                context.fill(cornerX, cornerY, cornerX + thickness, cornerY + length, color)
+            }
+            topRight -> {
+                context.fill(cornerX - length, cornerY, cornerX, cornerY + thickness, color)
+                context.fill(cornerX - thickness, cornerY, cornerX, cornerY + length, color)
+            }
+            bottomLeft -> {
+                context.fill(cornerX, cornerY - thickness, cornerX + length, cornerY, color)
+                context.fill(cornerX, cornerY - length, cornerX + thickness, cornerY, color)
+            }
+            bottomRight -> {
+                context.fill(cornerX - length, cornerY - thickness, cornerX, cornerY, color)
+                context.fill(cornerX - thickness, cornerY - length, cornerX, cornerY, color)
+            }
+        }
+    }
+
+    private fun renderContent(context: DrawContext, x: Int, y: Int, width: Int, height: Int) {
+        // Content area (leave space at bottom for texture's built-in arrow area)
+        val contentY = y + HEADER_HEIGHT + 2
+        val contentAreaHeight = height - HEADER_HEIGHT - 14  // Space at bottom for arrow region
+
+        // Calculate text width (assume scrollbar present for height calc to avoid circular dependency)
+        val fullContentX = x + PADDING  // Full width start (for separators)
+        val textStartX = x + PADDING + LOG_TEXT_INDENT  // Indented start (for text)
+        val maxFullContentWidth = width - PADDING * 2 - SCROLLBAR_WIDTH - 4  // Assume scrollbar for height calc
+        val maxTextContentWidth = maxFullContentWidth - LOG_TEXT_INDENT
+
+        // Calculate content height with text wrapping
+        val mc = MinecraftClient.getInstance()
+        val previousContentHeight = contentHeight
+        contentHeight = calculateContentHeight(mc, maxTextContentWidth)
+        visibleHeight = contentAreaHeight
+
+        val maxScroll = (contentHeight - visibleHeight).coerceAtLeast(0)
+
+        // Auto-scroll to bottom if following and content grew (new messages arrived)
+        if (isFollowingBottom && contentHeight > previousContentHeight) {
+            scrollOffset = maxScroll
+        } else {
+            scrollOffset = scrollOffset.coerceIn(0, maxScroll)
+        }
+
+        // Also update following state if we're now at/near bottom
+        if (maxScroll <= 0 || scrollOffset >= maxScroll - BOTTOM_THRESHOLD) {
+            isFollowingBottom = true
+        }
+
+        // Now calculate actual widths based on whether scrollbar is needed
+        val scrollbarSpace = if (contentHeight > visibleHeight) SCROLLBAR_WIDTH + 4 else 0
+        val fullContentWidth = width - PADDING * 2 - scrollbarSpace
+        val textContentWidth = fullContentWidth - LOG_TEXT_INDENT
+
+        // Render log entries with scissor (use full width for scissor to allow separators)
+        enableScissor(context, fullContentX, contentY, fullContentWidth, contentAreaHeight)
+        renderLogEntries(context, mc, fullContentX, textStartX, contentY, fullContentWidth, textContentWidth)
+        disableScissor()
+
+        // Scrollbar if needed
+        if (contentHeight > visibleHeight) {
+            renderScrollbar(context, x + width - SCROLLBAR_WIDTH - 3, contentY, contentAreaHeight)
+        }
+    }
+
+    private fun calculateContentHeight(mc: MinecraftClient, textWidth: Int): Int {
+        val entries = BattleLog.getEntries()
+        if (entries.isEmpty()) return lineHeight
+
+        val fontScale = 0.7f * PanelConfig.logFontScale
+        var height = 0
+        var lastTurn = -1
+
+        for (entry in entries) {
+            if (entry.turn != lastTurn) {
+                if (lastTurn != -1) {
+                    height += 3  // Gap before separator
+                }
+                height += lineHeight  // Turn header
+                height += 2  // Gap after separator
+                lastTurn = entry.turn
+            }
+
+            if (entry.type == BattleLog.EntryType.TURN) continue
+
+            // Use cached wrapped lines for performance
+            val lines = entry.getWrappedLines(textWidth, fontScale) { text, width, scale ->
+                wrapText(mc, text, width, scale)
+            }
+            height += lineHeight * lines.size
+        }
+
+        return height.coerceAtLeast(lineHeight)
+    }
+
+    /**
+     * Wraps text into multiple lines that fit within the given width.
+     */
+    private fun wrapText(mc: MinecraftClient, text: String, maxWidth: Int, scale: Float): List<String> {
+        if (text.isEmpty()) return listOf("")
+
+        val textRenderer = mc.textRenderer
+        val scaledMaxWidth = (maxWidth / scale).toInt()
+
+        val lines = mutableListOf<String>()
+        val words = text.split(" ")
+        var currentLine = StringBuilder()
+
+        for (word in words) {
+            val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
+            val testWidth = textRenderer.getWidth(testLine)
+
+            if (testWidth <= scaledMaxWidth) {
+                currentLine = StringBuilder(testLine)
+            } else {
+                // Current line is full, start a new one
+                if (currentLine.isNotEmpty()) {
+                    lines.add(currentLine.toString())
+                }
+                // Check if single word is too long
+                if (textRenderer.getWidth(word) > scaledMaxWidth) {
+                    // Word itself is too long, need to break it
+                    var remaining = word
+                    while (remaining.isNotEmpty()) {
+                        var fit = remaining
+                        while (textRenderer.getWidth(fit) > scaledMaxWidth && fit.length > 1) {
+                            fit = fit.dropLast(1)
+                        }
+                        lines.add(fit)
+                        remaining = remaining.drop(fit.length)
+                    }
+                    currentLine = StringBuilder()
+                } else {
+                    currentLine = StringBuilder(word)
+                }
+            }
+        }
+
+        if (currentLine.isNotEmpty()) {
+            lines.add(currentLine.toString())
+        }
+
+        return if (lines.isEmpty()) listOf("") else lines
+    }
+
+    private fun renderLogEntries(context: DrawContext, mc: MinecraftClient, separatorX: Int, textX: Int, startY: Int, separatorWidth: Int, textWidth: Int) {
+        val entries = BattleLog.getEntries()
+
+        if (entries.isEmpty()) {
+            val emptyY = startY + 4
+            if (emptyY >= scissorMinY && emptyY <= scissorMaxY) {
+                drawText(context, "No battle messages", textX.toFloat(), emptyY.toFloat(), TEXT_DIM, 0.7f * PanelConfig.logFontScale)
+            }
+            return
+        }
+
+        var currentY = startY - scrollOffset
+        var lastTurn = -1
+        val fontScale = 0.7f * PanelConfig.logFontScale
+
+        for (entry in entries) {
+            // Turn separator (uses full width, no indent)
+            if (entry.turn != lastTurn) {
+                if (lastTurn != -1) {
+                    currentY += 3
+                }
+
+                if (currentY >= scissorMinY - lineHeight && currentY <= scissorMaxY + lineHeight) {
+                    renderTurnSeparator(context, separatorX, currentY, separatorWidth, entry.turn)
+                }
+                currentY += lineHeight + 2
+                lastTurn = entry.turn
+            }
+
+            if (entry.type == BattleLog.EntryType.TURN) continue
+
+            // Render entry with cached text wrapping (uses indented position)
+            val color = getEntryColor(entry.type)
+            val lines = entry.getWrappedLines(textWidth, fontScale) { text, width, scale ->
+                wrapText(mc, text, width, scale)
+            }
+
+            for (line in lines) {
+                if (currentY >= scissorMinY - lineHeight && currentY <= scissorMaxY) {
+                    drawText(context, line, textX.toFloat(), currentY.toFloat(), color, fontScale)
+                }
+                currentY += lineHeight
+            }
+        }
+    }
+
+    private fun renderTurnSeparator(context: DrawContext, x: Int, y: Int, width: Int, turn: Int) {
+        val centerY = y + lineHeight / 2
+        val fontScale = 0.6f * PanelConfig.logFontScale
+
+        // No background - just subtle lines and text that blend with the texture
+        val turnText = "Turn $turn"
+        val mc = MinecraftClient.getInstance()
+        val actualTextWidth = (mc.textRenderer.getWidth(turnText) * fontScale).toInt()
+        val gap = 6  // Gap between line and text
+
+        // Calculate centered position for text
+        val textX = x + (width - actualTextWidth) / 2
+        val lineEndLeft = textX - gap
+        val lineStartRight = textX + actualTextWidth + gap
+
+        // Subtle horizontal lines
+        RenderSystem.enableBlend()
+        RenderSystem.defaultBlendFunc()
+        context.fill(x, centerY, lineEndLeft.coerceAtLeast(x), centerY + 1, TURN_LINE_COLOR)
+        context.fill(lineStartRight.coerceAtMost(x + width), centerY, x + width, centerY + 1, TURN_LINE_COLOR)
+
+        // Centered turn text
+        drawText(context, turnText, textX.toFloat(), (y + 1).toFloat(), TURN_TEXT_COLOR, fontScale)
+    }
+
+    private fun renderScrollbar(context: DrawContext, x: Int, y: Int, height: Int) {
+        RenderSystem.enableBlend()
+        RenderSystem.defaultBlendFunc()
+
+        // Background track
+        context.fill(x, y, x + SCROLLBAR_WIDTH, y + height, SCROLLBAR_BG)
+
+        // Thumb
+        val thumbHeight = ((visibleHeight.toFloat() / contentHeight) * height).toInt().coerceAtLeast(10)
+        val maxScroll = contentHeight - visibleHeight
+        val ratio = if (maxScroll > 0) scrollOffset.toFloat() / maxScroll else 0f
+        val thumbY = y + ((height - thumbHeight) * ratio).toInt()
+
+        context.fill(x, thumbY, x + SCROLLBAR_WIDTH, thumbY + thumbHeight, SCROLLBAR_THUMB)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Helpers
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private fun getEntryColor(type: BattleLog.EntryType): Int {
+        return when (type) {
+            BattleLog.EntryType.MOVE -> COLOR_MOVE
+            BattleLog.EntryType.HP -> COLOR_HP
+            BattleLog.EntryType.HEALING -> COLOR_HEALING
+            BattleLog.EntryType.EFFECT -> COLOR_EFFECT
+            BattleLog.EntryType.FIELD -> COLOR_FIELD
+            BattleLog.EntryType.TURN -> TURN_TEXT_COLOR
+            else -> COLOR_OTHER
+        }
+    }
+
+    private fun drawText(context: DrawContext, text: String, x: Float, y: Float, color: Int, scale: Float) {
+        drawScaledText(
+            context = context,
+            text = Text.literal(text),
+            x = x,
+            y = y,
+            scale = scale,
+            colour = color,
+            shadow = true
+        )
+    }
+
+    private fun enableScissor(context: DrawContext, x: Int, y: Int, width: Int, height: Int) {
+        scissorMinY = y
+        scissorMaxY = y + height
+
+        val mc = MinecraftClient.getInstance()
+        val scale = mc.window.scaleFactor
+
+        val scaledX = (x * scale).toInt()
+        val scaledY = ((mc.window.scaledHeight - y - height) * scale).toInt()
+        val scaledWidth = (width * scale).toInt()
+        val scaledHeight = (height * scale).toInt()
+
+        RenderSystem.enableScissor(scaledX, scaledY, scaledWidth, scaledHeight)
+    }
+
+    private fun disableScissor() {
+        RenderSystem.disableScissor()
+    }
+}
