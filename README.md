@@ -1,3 +1,6 @@
+# Cobblemon 1.6 fork
+For Cobblemon 1.7 use original version instead
+
 # Cobblemon Extended Battle UI
 
 A client-side Fabric mod that adds helpful information displays to Cobblemon battles.
@@ -45,10 +48,10 @@ Your preferences for panel size and state are saved automatically.
 ## Requirements
 
 - Minecraft 1.21.1
-- Fabric Loader 0.16.0+
+- Fabric Loader 0.18.1+
 - Fabric API
 - Fabric Language Kotlin
-- Cobblemon 1.7.0+
+- Cobblemon 1.6
 
 ## Notes
 
